@@ -3,60 +3,100 @@
 #include <SPI.h>
 #include <CubemarsAK.h>
 
-CubemarsAK motor1(10); // Instantiate motor1 with chip select pin 10
-char receivedChars[32]; // Buffer for input
-char currentMode;       // Variable to hold the current mode
-float value;           // Variable to hold the parsed value
+#define x_control 104
+#define x_data 2147494248
+#define y_control 105
+#define y_data 2147494249
+#define z_control 106
+#define z_data 2147494250
+
+CubemarsAK chassis(10);
+// CubemarsAK lift(9);
+
+float pos_x, vel_x, cur_x = 0.0;
+float pos_y, vel_y, cur_y = 0.0;
+// float pos_z, vel_z, cur_z = 0.0;
+float cmd_x, cmd_y, cmd_z = 0.0;
+bool commandReceived = false;
+
+
+void sendMotorData(){
+    pos_x = chassis.getPosition(x_data);
+    vel_x = chassis.getSpeed(x_data);
+    cur_x = chassis.getCurrent(x_data);
+
+    pos_y = chassis.getPosition(y_data);
+    vel_y = chassis.getSpeed(y_data);
+    cur_y = chassis.getCurrent(y_data);
+
+    // pos_z = chassis.getPosition(z_data);
+    // vel_z = chassis.getSpeed(z_data);
+    // cur_z = chassis.getCurrent(z_data);
+
+    String dataPacket = "SEND ";
+    dataPacket += String(pos_x, 2) + ", " + String(vel_x, 2) + ", " + String(cur_x, 2) + ", ";
+    dataPacket += String(pos_y, 2) + ", " + String(vel_y, 2) + ", " + String(cur_y, 2) + "\n";
+    // dataPacket += String(pos_z, 2) + ", " + String(vel_z, 2) + ", " + String(cur_z, 2) + "\n";
+
+    Serial.print(dataPacket);
+}
+
+void parseCommand(String input) {
+  // Check if the message starts with "RECV,"
+  if (input.startsWith("RECV,")) {
+    commandReceived = true;
+    input.remove(0, 5); // Remove "RECV," from the input string
+
+    // Split the string into three parts using commas as separators
+    int firstComma = input.indexOf(',');
+    int secondComma = input.indexOf(',', firstComma + 1);
+
+    if (firstComma == -1 || secondComma == -1) {
+      Serial.println("Invalid command format.");
+      return;
+    }
+
+    // Extract each command part
+    String cmd0 = input.substring(0, firstComma);
+    String cmd1 = input.substring(firstComma + 1, secondComma);
+    String cmd2 = input.substring(secondComma + 1);
+
+    // Convert to float or integer if needed
+    cmd_x = cmd0.toFloat();
+    cmd_y = cmd1.toFloat();
+    cmd_z = cmd2.toFloat();
+  } else {
+    Serial.println("Invalid command prefix.");
+  }
+}
 
 void setup() {
     Serial.begin(115200);
-    while (!Serial); // Wait for serial to be ready
+    while (!Serial);
 
-    motor1.initializeCAN(); // Initialize CAN in CubemarsAK class
+    chassis.initializeCAN();
+    // lift.initializeCAN();
+
 }
 
+
+
 void loop() {
-    // Unpack the servo readings
-    motor1.unpackServo();
+    chassis.unpackServo();
+    // lift.unpackServo();
+    
+    sendMotorData();
 
-    // Start rotating randomly for 10 minutes
-    static unsigned long startTime = 0; // Record start time
-    static bool running = false; // Flag to keep track of whether we're running
-
-    // Start the motor and set the timer if not already running
-    if (!running) {
-        Serial.println("Starting random rotation for 10 minutes.");
-        startTime = millis(); // Record the start time
-        running = true; // Set the running flag
-    }
-
-    // Check if 10 minutes have passed
-    if (running) {
-        if (millis() - startTime < 10 * 60 * 1000) { // 10 minutes in milliseconds
-            // Generate random position and speed
-            float randomPosition = random(-360, 360); // Random position between 0 and 180 degrees
-            int randomSpeed = random(1000, 5000); // Random speed between 100 and 1000 RPM
-            int randomAcceleration = random(1000, 2000); // Random acceleration
-
-            // Set position-velocity mode
-            Serial.print("Setting Position to: ");
-            Serial.println(randomPosition);
-            Serial.print("Setting Speed to: ");
-            Serial.println(randomSpeed);
-
-            motor1.comm_can_set_pos_spd(105, randomPosition, randomSpeed, randomAcceleration); // Set position-velocity
-            
-            // Optional: Add a delay to allow the motor to reach the position before changing again
-            delay(1000); // Adjust this delay as necessary to allow for movement
-        } else {
-            Serial.println("10 minutes elapsed. Stopping motor.");
-            motor1.comm_can_set_duty(105, 0); // Stop the motor
-            running = false; // Update the flag to stop running
+    if(Serial.available() > 0){
+        String input = Serial.readStringUntil('\n'); // Read until newline character
+        parseCommand(input); // Parse and print the values
+        if(commandReceived == true){
+            if(!((chassis.getPosition(x_data) == cmd_x) && (chassis.getPosition(y_data) == cmd_x))){
+                chassis.comm_can_set_pos_spd(x_control, cmd_x, 2000, 1000);
+                chassis.comm_can_set_pos_spd(y_control, cmd_x, 2000, 1000);
+                // lift.comm_can_set_pos_spd(z_control, cmd_x, 2000, 1000);
+            }
         }
     }
 
-    // Optionally print the current position
-    Serial.print("Temp: ");
-    Serial.println(motor1.getMotorTemp());
 }
-

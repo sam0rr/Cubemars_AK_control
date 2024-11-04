@@ -94,8 +94,6 @@ void CubemarsAK::comm_can_set_origin(uint8_t controller_id, uint8_t set_origin_m
     int32_t send_index = 0;
     uint8_t buffer[1]; // Change buffer size to hold only one byte
     buffer[send_index++] = set_origin_mode; // Set the origin mode in the buffer
-    
-    // Transmit the CAN message with the origin setting
     comm_can_transmit_eid(canId(controller_id, AKMode::AK_ORIGIN), buffer, send_index);
 }
 
@@ -112,25 +110,50 @@ void CubemarsAK::comm_can_set_pos_spd(uint8_t controller_id, float pos,int16_t s
 
 void CubemarsAK::unpackServo(){
     if (mcp2515.readMessage(&canMsg2) == MCP2515::ERROR_OK) {
-        position = (canMsg2.data[0] << 8) | canMsg2.data[1];
-        position *= 0.1;
-        speed = (canMsg2.data[2] << 8) | canMsg2.data[3];
-        speed *= 10;
-        current = (canMsg2.data[4] << 8) | canMsg2.data[5];
-        current *= 0.01;
-        motorTemp = canMsg2.data[6];
-        errorCode = canMsg2.data[7];
+        canid_t can_id = canMsg2.can_id;
+        MotorData data;
+        data.position = ((canMsg2.data[0] << 8) | canMsg2.data[1]) * 0.1;
+        data.speed = ((canMsg2.data[2] << 8) | canMsg2.data[3]) * 10;
+        data.current = ((canMsg2.data[4] << 8) | canMsg2.data[5]) * 0.01;
+        data.motorTemp = canMsg2.data[6];
+        data.errorCode = canMsg2.data[7];
+        motorReadings[can_id] = data; 
     } 
 }
 
-float CubemarsAK::getPosition() const { return position; }
 
-float CubemarsAK::getSpeed() const { return speed; }
+float CubemarsAK::getPosition(canid_t canID) {
+    if (motorReadings.find(canID) != motorReadings.end()) {
+        return motorReadings[canID].position;
+    }
+    return 0.0;
+}
 
-float CubemarsAK::getCurrent() const { return current; }
+float CubemarsAK::getSpeed(canid_t canID) {
+    if (motorReadings.find(canID) != motorReadings.end()) {
+        return motorReadings[canID].speed;
+    }
+    return 0.0;
+}
 
-int8_t CubemarsAK::getMotorTemp() const { return motorTemp; }
+float CubemarsAK::getCurrent(canid_t canID) {
+    if (motorReadings.find(canID) != motorReadings.end()) {
+        return motorReadings[canID].current;
+    }
+    return 0.0; 
+}
 
-uint8_t CubemarsAK::getErrorCode() const { return errorCode; }
+int8_t CubemarsAK::getMotorTemp(canid_t canID) {
+    if (motorReadings.find(canID) != motorReadings.end()) {
+        return motorReadings[canID].motorTemp;
+    }
+    return 0.0; 
+}
 
+uint8_t CubemarsAK::getErrorCode(canid_t canID) {
+    if (motorReadings.find(canID) != motorReadings.end()) {
+        return motorReadings[canID].errorCode;
+    }
+    return 0.0; 
+}
 

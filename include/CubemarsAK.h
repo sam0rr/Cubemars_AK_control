@@ -4,21 +4,15 @@
 #include <Arduino.h>
 #include <SPI.h>
 #include <mcp2515.h>
+#include <map>
 
-#define P_MIN -32000
-#define P_MAX 32000
-#define V_MIN -32000
-#define V_MAX 32000
-#define CUR_MIN -1500
-#define CUR_MAX 1500
-#define T_MIN -30
-#define T_MAX 30
-#define Kt_TMotor 0.091
-#define Kt_actual 0.105
-#define Current_Factor 0.59
-#define GEAR_RATIO 9.0
-#define NUM_POLE_PAIRS 21
-
+struct MotorData {
+    float position;
+    float speed;
+    float current;
+    uint8_t motorTemp;
+    uint8_t errorCode;
+};
 
 // Define the AKMode enum
 enum AKMode {
@@ -36,6 +30,8 @@ class CubemarsAK {
 public:
     CubemarsAK(uint8_t csPin);
     ~CubemarsAK();
+
+    std::map<canid_t, MotorData> motorReadings;
     
     void initializeCAN();
 
@@ -58,12 +54,11 @@ public:
     void buffer_append_int16(uint8_t* buffer, int16_t number, int16_t *index);
 
     void unpackServo();
-    float getPosition() const;
-    float getSpeed() const;
-    float getCurrent() const;
-    int8_t getMotorTemp() const;
-    uint8_t getErrorCode() const;
-
+    float getPosition(canid_t can_id);
+    float getSpeed(canid_t can_id);
+    float getCurrent(canid_t can_id);
+    int8_t getMotorTemp(canid_t can_id);
+    uint8_t getErrorCode(canid_t can_id);
 
     struct can_frame canMsg2;
     MCP2515 mcp2515;
