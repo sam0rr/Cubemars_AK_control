@@ -38,21 +38,11 @@ Install the following libraries in your Arduino IDE:
 
 The motor supports several control modes via CAN commands. Below are the main functions used for controlling the motor.
 
-#### 1. **Position Control** (`comm_can_set_pos()`)
+#### 1. **Position Control** (`set_pos()`)
 This function sets the motor to position control mode. You specify a controller id and target position, and the motor will rotate to that position.
 
-#### 2. **Velocity Control** (`comm_can_set_spd()`)
+#### 2. **Velocity Control** (`set_spd()`)
 This function sets the motor to velocity control mode. You specify a controller id and target speed, and the motor will attempt to maintain that speed.
 
-#### 3. **Position-Velocity Control** (`comm_can_set_pos_spd()`)
+#### 3. **Position-Velocity Control** (`pos_spd()`)
 This function combines position and velocity control, allowing you to set both a target position and a maximum velocity for reaching that position.
-
-#### 4. **Reading Motor Parameters** (`unpack_servo()`)
-This function is used to read motor parameters such as:
-- Position
-- Speed
-- Current
-- Temperature
-- Error codes
-
-The motor sends these parameters back via CAN, and `unpack_servo()` extracts this data for monitoring purposes.

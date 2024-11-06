@@ -109,14 +109,12 @@ void parseCommand(String input) {
       return;
     }
 
-    // Extract each command part
     String cmd0 = input.substring(0, firstComma);
     String cmd1 = input.substring(firstComma + 1, secondComma);
     String cmd2 = input.substring(secondComma + 1);
 
-    // Convert to float or integer if needed
-    cmd_x = cmd0.toFloat();
-    cmd_y = cmd1.toFloat();
+    cmd_x = (cmd0.toFloat()*360)/(PI*WHEEL_DIAMETER);
+    cmd_y = (cmd1.toFloat()*360)/(PI*WHEEL_DIAMETER);
     cmd_z = cmd2.toFloat();
   } else {
     Serial.println("Invalid command prefix.");
