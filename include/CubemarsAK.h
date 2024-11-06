@@ -6,13 +6,13 @@
 #include <mcp2515.h>
 #include <map>
 
-struct MotorData {
-    float position;
-    float speed;
-    float current;
-    uint8_t motorTemp;
-    uint8_t errorCode;
-};
+// struct MotorData {
+//     float position;
+//     float speed;
+//     float current;
+//     uint8_t motorTemp;
+//     uint8_t errorCode;
+// };
 
 // Define the AKMode enum
 enum AKMode {
@@ -31,7 +31,7 @@ public:
     CubemarsAK(uint8_t csPin);
     ~CubemarsAK();
 
-    std::map<canid_t, MotorData> motorReadings;
+    // std::map<canid_t, MotorData> motorReadings;
     
     void initializeCAN();
 
@@ -41,13 +41,13 @@ public:
     float uint_to_float(unsigned int x_int, float x_min, float x_max, int bits);
     void pack_cmd();
 
-    void comm_can_set_duty(uint8_t controller_id, float duty);
-    void comm_can_set_current(uint8_t controller_id, float current);
-    void comm_can_set_cb(uint8_t controller_id, float current);
-    void comm_can_set_rpm(uint8_t controller_id, float rpm);
-    void comm_can_set_pos(uint8_t controller_id, float pos);
-    void comm_can_set_origin(uint8_t controller_id, uint8_t set_origin_mode);
-    void comm_can_set_pos_spd(uint8_t controller_id, float pos, int16_t spd, int16_t RPA);
+    void set_duty(uint8_t controller_id, float duty);
+    void set_current(uint8_t controller_id, float current);
+    void set_cb(uint8_t controller_id, float current);
+    void set_spd(uint8_t controller_id, float rpm);
+    void set_pos(uint8_t controller_id, float pos);
+    void set_origin(uint8_t controller_id, uint8_t set_origin_mode);
+    void set_pos_spd(uint8_t controller_id, float pos, int16_t spd, int16_t RPA);
 
     void comm_can_transmit_eid(uint32_t id, const uint8_t *data, uint8_t len);
     void buffer_append_int32(uint8_t* buffer, int32_t number, int32_t *index);
