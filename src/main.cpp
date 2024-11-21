@@ -106,25 +106,27 @@ void sendMotorData() {
     vel_z = getSpeed(Z_DATA);
     cur_z = getCurrent(Z_DATA);
 
+    // Set desired number of decimal places, e.g., 3 decimal places
     Serial.print("SEND ");
-    Serial.print(pos_x);
+    Serial.print(pos_x, 4);
     Serial.print(", ");
-    Serial.print(vel_x);
+    Serial.print(vel_x, 2);
     Serial.print(", ");
-    Serial.print(cur_x);
+    Serial.print(cur_x, 2);
     Serial.print(", ");
-    Serial.print(pos_y);
+    Serial.print(pos_y, 4);
     Serial.print(", ");
-    Serial.print(vel_y);
+    Serial.print(vel_y, 2);
     Serial.print(", ");
-    Serial.print(cur_y);
+    Serial.print(cur_y, 2);
     Serial.print(", ");
-    Serial.print(pos_z);
+    Serial.print(pos_z, 4);
     Serial.print(", ");
-    Serial.print(vel_z);
+    Serial.print(vel_z, 2);
     Serial.print(", ");
-    Serial.println(cur_z);
-    // delay(10);
+    Serial.print(cur_z, 2);
+    Serial.println();
+
 }
 
 
@@ -212,9 +214,14 @@ void setup() {
     power_on(X_CONTROL);
     power_on(Y_CONTROL);
     power_on(Z_CONTROL);
+
+    chassis.set_origin(X_CONTROL, 1);
+    lift.set_origin(Z_CONTROL, 1);
+    chassis.set_origin(Y_CONTROL, 1);
 }
 
-
+unsigned long previousMillis = 0;  // Stores the last time Serial was checked
+const unsigned long interval = 10; // Interval in milliseconds
 
 void loop() {
     if (chassis.mcp2515.readMessage(&chassis.canMsg2) == MCP2515::ERROR_OK) {
@@ -222,7 +229,7 @@ void loop() {
         MotorData data;
         // data.position = ((chassis.canMsg2.data[0] << 8) | chassis.canMsg2.data[1]) * 0.1;
         data.position = (((chassis.canMsg2.data[0] << 8) | chassis.canMsg2.data[1]) * 0.1 * PI * WHEEL_DIAMETER) / 360;
-        data.speed = (((chassis.canMsg2.data[2] << 8) | chassis.canMsg2.data[3]) * 10) / (POLE_PAIRS * CHASSIS_REDUCTION_RATIO);
+        data.speed = ((((chassis.canMsg2.data[2] << 8) | chassis.canMsg2.data[3]) * 10) / (POLE_PAIRS * CHASSIS_REDUCTION_RATIO)) * ((2*PI*WHEEL_DIAMETER)/60);
         //ERPM
         // data.current = ((chassis.canMsg2.data[4] << 8) | chassis.canMsg2.data[5]) * 0.01;
         // qaxis current
@@ -240,7 +247,7 @@ void loop() {
         canid_t can_id = lift.canMsg2.can_id;
         MotorData data;
         data.position = (((lift.canMsg2.data[0] << 8) | lift.canMsg2.data[1]) * 0.1 * PI * 0.2)/360;
-        data.speed = (((lift.canMsg2.data[2] << 8) | lift.canMsg2.data[3]) * 10) / (POLE_PAIRS * LIFT_REDUCTION_RATIO);
+        data.speed = ((((lift.canMsg2.data[2] << 8) | lift.canMsg2.data[3]) * 10) / (POLE_PAIRS * LIFT_REDUCTION_RATIO)) * ((2*PI*0.2)/60);
         // data.current = ((lift.canMsg2.data[4] << 8) | lift.canMsg2.data[5]) * 0.01;
         data.current = ((chassis.canMsg2.data[4] << 8) | chassis.canMsg2.data[5]) * 0.01 * Kt_LIFT * LIFT_REDUCTION_RATIO;
         data.motorTemp = lift.canMsg2.data[6];
@@ -251,14 +258,18 @@ void loop() {
 
     sendMotorData();
 
-    if(Serial.available()){
 
+    // Check for available serial data
+    if (Serial.available()) {
         String input = Serial.readStringUntil('\n');
-        parseCommand(input); 
-        if(commandReceived == true){
-            chassis.set_pos_spd(X_CONTROL, cmd_x, 3000, 1000); 
+        // Serial.println(input);
+
+        parseCommand(input);
+
+        if (commandReceived == true) {
+            chassis.set_pos_spd(X_CONTROL, cmd_x, 3000, 3000); 
             lift.set_pos_spd(Z_CONTROL, cmd_z, 5000, 5000);
-            chassis.set_pos_spd(Y_CONTROL, cmd_y, 3000, 1000);
+            chassis.set_pos_spd(Y_CONTROL, cmd_y, 3000, 3000);
 
             commandReceived = false;
         }
