@@ -72,3 +72,11 @@ This function sets the motor to velocity control mode. You specify a controller 
 #### 3. **Position-Velocity Control** (`pos_spd()`)
 
 This function combines position and velocity control, allowing you to set both a target position and a maximum velocity for reaching that position.
+
+## Formatting
+
+To format the source code using the project's style guide (requires `clang` package):
+
+```bash
+clang-format -i src/*.cpp include/*.h
+```
