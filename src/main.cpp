@@ -3,79 +3,80 @@
 #include <SPI.h>
 #include <CubemarsAK.h>
 
-// Motor configuration
-#define MOTOR_ID 1
-#define WHEEL_DIAMETER 0.1
+// ================= CONFIGURATION =================
+#define CS_PIN          14      // Chip Select (GPIO 14)
+#define MOTOR_ID        1       // Target Motor ID
+#define WHEEL_DIAMETER  0.1     // 10cm Wheel
+#define SERIAL_BAUD     115200
 
-struct MotorData {
-    float position;
-    float speed;
-    float current;
-};
+// ================= OBJECTS =================
+CubemarsAK ak(CS_PIN);
 
-std::map<canid_t, MotorData> motorReadings;
-CubemarsAK ak(14); // CS set to 14
+// Variables for movement logic
+unsigned long lastMoveTime = 0;
+bool togglePosition = false;
 
-void power_on(uint16_t motor_id) {
-    struct can_frame canMsg;
-    canMsg.can_id = motor_id;
-    canMsg.can_dlc = 8;
-    for(int i=0; i<7; i++) canMsg.data[i] = 0xFF;
-    canMsg.data[7] = 0xFC;
-    ak.mcp2515.sendMessage(&canMsg);
-}
-
+// ================= SETUP =================
 void setup() {
-    Serial.begin(115200);
-    while (!Serial) {};
+    Serial.begin(SERIAL_BAUD);
+    while (!Serial) {}; 
     
-    SPI.begin();
-    ak.initializeCAN();
+    Serial.println("\n[SYSTEM] Starting Motion Test...");
 
-    // Initial commands to activate the motor
-    power_on(MOTOR_ID);
-    ak.set_origin(MOTOR_ID, 1);
+    SPI.begin();
+
+    // 1. Retry connecting to MCP2515 until success
+    Serial.print("[INIT] Connecting to MCP2515...");
+    while (ak.mcp2515.reset() != MCP2515::ERROR_OK) {
+        Serial.print(".");
+        delay(500); 
+    }
+    Serial.println(" SUCCESS!");
+
+    // 2. Init CAN
+    ak.initializeCAN();
+    Serial.println("[INIT] Ready to move!");
     
-    Serial.println("Motor initialized and ready on CS 16.");
+    // Safety delay
+    delay(1000);
 }
 
+// ================= LOOP =================
 void loop() {
-    // Read incoming CAN messages
-    while (ak.mcp2515.readMessage(&ak.canMsg2) == MCP2515::ERROR_OK) {
-        canid_t id = ak.canMsg2.can_id;
-        MotorData data;
-        
-        // Position: 0.1 deg/LSB converted to meters
-        data.position = (((int16_t)(ak.canMsg2.data[0] << 8) | ak.canMsg2.data[1]) * 0.1 * PI * WHEEL_DIAMETER) / 360;
-        // Speed: 10 RPM/LSB
-        data.speed = ((int16_t)(ak.canMsg2.data[2] << 8) | ak.canMsg2.data[3]) * 10.0;
-        // Current: 0.01 A/LSB
-        data.current = ((int16_t)(ak.canMsg2.data[4] << 8) | ak.canMsg2.data[5]) * 0.01;
-        
-        motorReadings[id] = data;
-    }
+    // --- 1. MOVEMENT LOGIC (Every 3 seconds) ---
+    if (millis() - lastMoveTime >= 3000) {
+        lastMoveTime = millis();
+        togglePosition = !togglePosition;
 
-    // Format output for python_serial.py (expects exactly 9 values)
-    if (!motorReadings.empty()) {
-        MotorData d = motorReadings.begin()->second;
-        Serial.print("SEND ");
-        Serial.print(d.position, 4); Serial.print(", ");
-        Serial.print(d.speed, 2);    Serial.print(", ");
-        Serial.print(d.current, 2);  Serial.print(", ");
-        // Fill the 6 other required values with 0.0
-        Serial.println("0.0, 0.0, 0.0, 0.0, 0.0, 0.0");
-    }
-
-    // Manual command handling
-    if (Serial.available()) {
-        String input = Serial.readStringUntil('\n');
-        if (input.startsWith("MOVE,")) {
-            float target = input.substring(5).toFloat();
-            ak.set_pos_spd(MOTOR_ID, target, 2000, 2000);
-            Serial.print("Moving to: ");
-            Serial.println(target);
+        if (togglePosition) {
+            Serial.println(">>> MOVING TO: 180 Degrees");
+            // Syntax: ID, Position (deg), Speed (rpm), Acceleration (rpm/s)
+            ak.set_pos_spd(MOTOR_ID, 180, 1000, 500);
+        } else {
+            Serial.println(">>> MOVING TO: 0 Degrees");
+            ak.set_pos_spd(MOTOR_ID, 0, 1000, 500);
         }
     }
 
-    delay(20); 
+    // --- 2. READING FEEDBACK ---
+    if (ak.mcp2515.readMessage(&ak.canMsg2) == MCP2515::ERROR_OK) {
+        
+        // Decoding (Standard Servo Mode Data)
+        int16_t raw_pos = (ak.canMsg2.data[0] << 8) | ak.canMsg2.data[1];
+        int16_t raw_current = (ak.canMsg2.data[4] << 8) | ak.canMsg2.data[5];
+
+        // Convert raw pos (0.1 deg/bit) to actual Degrees
+        float current_deg = raw_pos * 0.1; 
+        float current_amps = raw_current * 0.01;
+
+        // Print only if ID matches (ignoring the extended bits logic for simplicity)
+        // We check the lowest byte to match ID 1
+        if ((ak.canMsg2.can_id & 0xFF) == MOTOR_ID) {
+            Serial.print("Feedback -> Pos: ");
+            Serial.print(current_deg, 1);
+            Serial.print(" deg | Current: ");
+            Serial.print(current_amps, 2);
+            Serial.println(" A");
+        }
+    }
 }
