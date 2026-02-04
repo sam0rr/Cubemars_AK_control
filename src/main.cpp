@@ -18,10 +18,16 @@ void setup() {
     Serial.begin(SERIAL_BAUD);
     while (!Serial);
 
-    Serial.println("\n[SYSTEM] Starting AK40-10 Professional Control...");
+    Serial.println(F("\n[SYSTEM] Starting AK-Series Polymorphic Control..."));
 
     SPI.begin();
+
+    // 1. Initialize hardware
     ak.initializeCAN();
+
+    // 2. Attach motor with specific model configuration
+    // This tells the library that ID 1 is an AK40-10
+    ak.attachMotor(MOTOR_ID, MotorPresets::AK40_10);
 
     delay(1000);
 }
@@ -33,38 +39,39 @@ void loop() {
         togglePosition = !togglePosition;
 
         float targetPos = togglePosition ? 180.0f : 0.0f;
-        Serial.print(">>> COMMAND: Moving to ");
+        Serial.print(F(">>> COMMAND [ID "));
+        Serial.print(MOTOR_ID);
+        Serial.print(F("]: Moving to "));
         Serial.print(targetPos);
-        Serial.println(" deg");
+        Serial.println(F(" deg"));
 
-        // ID, Pos, Speed (Mechanical RPM), Accel (Mechanical RPM/s)
+        // The library now uses the config registered for MOTOR_ID
         ak.set_pos_spd(MOTOR_ID, targetPos, 200, 100);
     }
 
     // --- 2. FEEDBACK PROCESSING ---
-    // Update the internal state of all motors connected to the bus
     ak.updateFeedback();
 
-    // Print feedback at 10Hz to avoid flooding serial
     static unsigned long lastPrint = 0;
     if (millis() - lastPrint > 100) {
         lastPrint = millis();
 
+        // Data is automatically scaled based on the motor's gear ratio and poles
         float p = ak.getPosition(MOTOR_ID);
         float v = ak.getSpeed(MOTOR_ID);
         float i = ak.getCurrent(MOTOR_ID);
 
-        Serial.print("Motor [");
+        Serial.print(F("Motor ["));
         Serial.print(MOTOR_ID);
-        Serial.print("] -> ");
-        Serial.print("Pos: ");
+        Serial.print(F("] -> "));
+        Serial.print(F("Pos: "));
         Serial.print(p, 1);
-        Serial.print(" deg | ");
-        Serial.print("Spd: ");
+        Serial.print(F(" deg | "));
+        Serial.print(F("Spd: "));
         Serial.print(v, 0);
-        Serial.print(" RPM | ");
-        Serial.print("Cur: ");
+        Serial.print(F(" RPM | "));
+        Serial.print(F("Cur: "));
         Serial.print(i, 2);
-        Serial.println(" A");
+        Serial.println(F(" A"));
     }
 }
