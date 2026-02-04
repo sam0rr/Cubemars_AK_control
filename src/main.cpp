@@ -15,17 +15,16 @@
 #define BTN_STOP_ID 2
 
 // --- SAFETY & CONTROL ---
-#define MAX_RPM 2500        // Absolute safety limit
-#define GAUGE_SCALE 2500    // RPM value at 360 degrees
+#define MAX_RPM 2500        // 100% on Progress Bar
 #define RAMP_STEP 20.0f     // RPM change per cycle
 #define RAMP_INTERVAL 10    // Interval in ms (Soft Start/Stop)
-#define GAUGE_SMOOTHING 0.1 // 0.1 = Very smooth, 1.0 = Instant
+#define DISPLAY_SMOOTHING 0.1 // 0.1 = Very smooth animation
 
 // --- GLOBALS ---
 CubemarsAK ak(CS_PIN);
 float targetRPM = 0.0f;
 float currentCmdRPM = 0.0f;
-float displayedRPM = 0.0f;  // For smoothing
+float displayedRPM = 0.0f;  // For visual smoothing
 unsigned long lastRampTime = 0;
 unsigned long lastGuiUpdate = 0;
 
@@ -59,14 +58,18 @@ int32_t getVal(const String& var) {
     return -1;
 }
 
-void updateGauge(float realRPM) {
-    // Exponential Moving Average (EMA) for smoothness
-    displayedRPM = (displayedRPM * (1.0 - GAUGE_SMOOTHING)) + (abs(realRPM) * GAUGE_SMOOTHING);
+void updateProgressBar(float realRPM) {
+    // Exponential Moving Average (EMA) for smooth bar movement
+    displayedRPM = (displayedRPM * (1.0 - DISPLAY_SMOOTHING)) + (abs(realRPM) * DISPLAY_SMOOTHING);
 
-    int angle = map((long)displayedRPM, 0, GAUGE_SCALE, 0, 360);
-    if (angle > 360) angle = 360;
+    // Map RPM (0 to MAX) to Percentage (0 to 100)
+    int percent = map((long)displayedRPM, 0, MAX_RPM, 0, 100);
     
-    sendCmd("z0.val=" + String(angle));
+    // Clamp to 100% to avoid overflow
+    if (percent > 100) percent = 100;
+    
+    // Send to Progress Bar Component (j0)
+    sendCmd("j0.val=" + String(percent));
 }
 
 // --- SETUP ---
@@ -82,8 +85,8 @@ void setup() {
     // Initial State
     ak.set_spd(MOTOR_ID, 0.0f);
     sendCmd("t0.txt=\"Ready\"");
-    sendCmd("z0.val=0");
-    sendCmd("n0.val=1000");
+    sendCmd("j0.val=0");      // Reset Progress Bar
+    sendCmd("n0.val=1000");   // Default speed input
 
     Serial.println(F("[SYSTEM] Control Ready."));
 }
@@ -110,7 +113,7 @@ void loop() {
                 }
                 
                 targetRPM = (float)input;
-                sendCmd("t0.txt=\"Ramping...\"");
+                sendCmd("t0.txt=\"Accel...\"");
             } 
             else if (id == BTN_STOP_ID) {
                 targetRPM = 0.0f;
@@ -141,6 +144,6 @@ void loop() {
 
     if (millis() - lastGuiUpdate > 100) { // 10Hz update rate
         lastGuiUpdate = millis();
-        updateGauge(ak.getSpeed(MOTOR_ID));
+        updateProgressBar(ak.getSpeed(MOTOR_ID));
     }
 }
