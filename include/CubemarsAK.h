@@ -155,7 +155,7 @@ class CubemarsAK {
      */
     void set_pos_spd(uint8_t id, float pos, int16_t spd, int16_t rpa) noexcept;
 
-    // ================= TELEMETRY INTERFACE =================
+    // TELEMETRY INTERFACE
 
     /**
      * @brief Processes all pending CAN messages.
@@ -176,6 +176,9 @@ class CubemarsAK {
     struct can_frame canMsg; /**< Shared memory buffer for CAN frames */
 
    private:
+    /** @brief Validates if a motor is registered before commanding. */
+    bool isAttached(uint8_t id) const noexcept;
+
     /** @brief Builds an EFF CAN ID from ID and Mode. */
     uint32_t buildCanId(uint8_t id, AKMode mode) const noexcept;
 
@@ -190,9 +193,6 @@ class CubemarsAK {
     void appendInt32(uint8_t* buffer, int32_t val, int32_t* index) noexcept;
     void appendInt16(uint8_t* buffer, int16_t val, int16_t* index) noexcept;
     /** @} */
-
-    /** @brief Validates if a motor is registered before commanding. */
-    bool isAttached(uint8_t id) const noexcept;
 
     std::map<uint8_t, MotorData> _motors;    /**< Internal database of motor states */
     std::map<uint8_t, MotorConfig> _configs; /**< Configuration map per motor ID */
