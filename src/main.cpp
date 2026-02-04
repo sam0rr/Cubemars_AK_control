@@ -16,7 +16,7 @@
 
 // --- SAFETY & CONTROL ---
 #define MAX_RPM 2500        // 100% on Progress Bar
-#define RAMP_STEP 20.0f     // RPM change per cycle
+#define RAMP_STEP 10.0f     // RPM change per cycle
 #define RAMP_INTERVAL 10    // Interval in ms (Soft Start/Stop)
 #define DISPLAY_SMOOTHING 0.1 // 0.1 = Very smooth animation
 
@@ -131,8 +131,14 @@ void loop() {
             else currentCmdRPM -= RAMP_STEP;
         } else {
             currentCmdRPM = targetRPM; // Snap to target when close
-            if (targetRPM == 0 && currentCmdRPM == 0) sendCmd("t0.txt=\"Stopped\"");
-            else if (targetRPM > 0 && currentCmdRPM == targetRPM) sendCmd("t0.txt=\"Running\"");
+            
+            // Text Feedback
+            if (targetRPM == 0 && currentCmdRPM == 0) {
+                 sendCmd("t0.txt=\"Stopped\"");
+            }
+            else if (targetRPM > 0 && currentCmdRPM == targetRPM) {
+                 sendCmd("t0.txt=\"Running\"");
+            }
         }
 
         // Send velocity command (Velocity Mode)
@@ -144,6 +150,13 @@ void loop() {
 
     if (millis() - lastGuiUpdate > 100) { // 10Hz update rate
         lastGuiUpdate = millis();
-        updateProgressBar(ak.getSpeed(MOTOR_ID));
+        
+        // If target is 0 and we are very close to stop, force bar to 0 visually
+        // to avoid "1%" lingering bars.
+        if (targetRPM == 0 && abs(ak.getSpeed(MOTOR_ID)) < 50) {
+             sendCmd("j0.val=0");
+        } else {
+             updateProgressBar(ak.getSpeed(MOTOR_ID));
+        }
     }
 }
