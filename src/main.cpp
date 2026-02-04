@@ -3,12 +3,12 @@
 #include <SPI.h>
 #include <mcp2515.h>
 
-// ================= CONFIGURATION =================
+// CONFIGURATION
 #define CS_PIN 14   // Chip Select (GPIO 14)
 #define MOTOR_ID 1  // Target Motor ID
 #define SERIAL_BAUD 115200
 
-// ================= OBJECTS =================
+// OBJECTS
 CubemarsAK ak(CS_PIN);
 
 unsigned long lastMoveTime = 0;
