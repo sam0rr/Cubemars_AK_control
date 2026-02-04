@@ -87,6 +87,7 @@ To add new motor profiles, edit the `MotorPresets` namespace in `include/Cubemar
 ## Formatting
 
 To format the source code using the project's style guide (requires `clang` package):
+
 ```bash
 clang-format -i src/*.cpp include/*.h
 prettier -w *

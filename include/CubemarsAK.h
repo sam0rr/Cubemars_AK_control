@@ -95,7 +95,8 @@ class CubemarsAK {
 
     /**
      * @brief Registers a motor ID with a specific hardware configuration.
-     * @details Mandatory prerequisite for all set_* commands. Commands sent to unattached IDs will be ignored.
+     * @details Mandatory prerequisite for all set_* commands. Commands sent to unattached IDs will
+     * be ignored.
      * @param id The CAN ID of the motor.
      * @param config The hardware parameters (Gear ratio, poles, etc).
      */
