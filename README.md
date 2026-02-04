@@ -1,12 +1,12 @@
-# CubeMars AK80-9 Motor Control with Arduino (ESP32) and MCP2515 CAN Module
+# CubeMars ak40-10 Motor Control with Arduino (ESP32) and MCP2515 CAN Module
 
 ## Overview
 
-Code to control the CubeMars AK80-9 motor using an Arduino (ESP32) and the MCP2515 CAN module. The motor supports various control modes such as position control, velocity control, and position-velocity hybrid control. The code also includes functions to read motor parameters like position, speed, current, temperature, and error codes via CAN communication.
+Code to control the CubeMars ak40-10 motor using an Arduino (ESP32) and the MCP2515 CAN module. The motor supports various control modes such as position control, velocity control, and position-velocity hybrid control. The code also includes functions to read motor parameters like position, speed, current, temperature, and error codes via CAN communication.
 
 ## Equipment
 
-- **CubeMars AK80-9 motor** (30-45V power input)
+- **CubeMars ak40-10 motor** (30-45V power input)
 - **ESP32 WROVER-KIT** (controller)
 - **MCP2515 CAN module** (to handle CAN communication)
 - **Power supply** (30-45V for motor)
@@ -29,7 +29,7 @@ Code to control the CubeMars AK80-9 motor using an Arduino (ESP32) and the MCP25
 
 ### Motor to Power Supply
 
-- Connect the CubeMars AK80-9 motor to the 30-45V power supply.
+- Connect the CubeMars ak40-10 motor to the 25-30V power supply.
 
 ### CAN Bus Wiring
 
