@@ -38,14 +38,19 @@ void sendCmd(const String& cmd) {
 }
 
 int32_t getVal(const String& var) {
-    while (Serial2.available()) Serial2.read(); // Clear buffer
+    // 1. Flush Buffer completely before requesting
+    while (Serial2.available()) Serial2.read(); 
+    
+    // 2. Send Request
     sendCmd("get " + var);
 
+    // 3. Wait for response (Timeout 400ms)
     uint32_t start = millis();
     while (Serial2.available() < 8) {
-        if (millis() - start > 50) return -1; // Fast timeout
+        if (millis() - start > 400) return -1; // Timeout Error
     }
 
+    // 4. Parse 0x71 Return Code (Number Data)
     if (Serial2.read() == 0x71) {
         int32_t val = 0;
         val |= Serial2.read();
@@ -102,20 +107,39 @@ void loop() {
             byte id = Serial2.read(); // Component ID
             while (Serial2.available()) Serial2.read(); // Flush
 
+            // --- START BUTTON ---
             if (id == BTN_START_ID) {
+                Serial.println(F("\n>>> START PRESSED"));
+                
+                // Read from screen
                 int32_t input = getVal("n0.val");
-                if (input <= 0) input = 500; // Fallback
+                
+                // --- DEBUG PRINTS ---
+                Serial.print(F(">>> Raw Value from Screen: "));
+                Serial.println(input);
+                
+                if (input == -1) Serial.println(F(">>> ERROR: Read Timeout or Bad Data"));
+                // --------------------
+
+                if (input <= 0) {
+                    Serial.println(F(">>> WARN: Input invalid. Using Fallback 500 RPM."));
+                    input = 500; 
+                }
                 
                 // Clamp input
                 if (input > MAX_RPM) {
                     input = MAX_RPM;
-                    sendCmd("n0.val=" + String(MAX_RPM)); // Feedback correction
+                    sendCmd("n0.val=" + String(MAX_RPM)); 
                 }
                 
                 targetRPM = (float)input;
+                Serial.print(F(">>> Target Set To: ")); Serial.println(targetRPM);
+                
                 sendCmd("t0.txt=\"Accel...\"");
             } 
+            // --- STOP BUTTON ---
             else if (id == BTN_STOP_ID) {
+                Serial.println(F("\n>>> STOP PRESSED"));
                 targetRPM = 0.0f;
                 sendCmd("t0.txt=\"Stopping...\"");
             }
