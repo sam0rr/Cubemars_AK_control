@@ -2,169 +2,21 @@
 #include <mcp2515.h>
 #include <SPI.h>
 #include <CubemarsAK.h>
-#include <JrkG2.h>
-#include <Wire.h>
-#include <VL53L0X.h>
 
 #define SDA_PIN 21
 #define SCL_PIN 22
 
-#define X_CONTROL 104
-#define X_DATA 2147494248
-#define Y_CONTROL 105
-#define Y_DATA 2147494249
-#define Z_CONTROL 106
-#define Z_DATA 2147494250
+// Single motor configuration (Factory Default ID = 1)
+#define MOTOR_ID 1
 
-#define POLE_PAIRS 21.0
-#define CHASSIS_REDUCTION_RATIO 9.0
-#define LIFT_REDUCTION_RATIO 64.0
 #define WHEEL_DIAMETER 0.1
-#define Kt_CHASSIS 0.105
-#define Kt_LIFT 0.136
-
 
 struct MotorData {
     float position;
-    float speed;
-    float current;
-    uint8_t motorTemp;
-    uint8_t errorCode;
 };
 
 std::map<canid_t, MotorData> motorReadings;
-
-JrkG2I2C jrk;
-CubemarsAK ak(5); // Single instance for unique adapter
-
-float pos_x, vel_x, cur_x = 0.0;
-float pos_y, vel_y, cur_y = 0.0;
-float pos_z, vel_z, cur_z = 0.0;
-float cmd_x, cmd_y, cmd_z = 0.0;
-bool commandReceived = false;
-
-float getPosition(canid_t canID) {
-    if (motorReadings.find(canID) != motorReadings.end()) {
-        return motorReadings[canID].position;
-    }
-    return 0.0;
-}
-
-float getSpeed(canid_t canID) {
-    if (motorReadings.find(canID) != motorReadings.end()) {
-        return motorReadings[canID].speed;
-    }
-    return 0.0;
-}
-
-float getCurrent(canid_t canID) {
-    if (motorReadings.find(canID) != motorReadings.end()) {
-        return motorReadings[canID].current;
-    }
-    return 0.0; 
-}
-
-void chassis_y(){
-    jrk.setTarget(2870);
-}
-
-void chassis_x(){
-    jrk.setTarget(410);
-}
-
-void chassis_stable(){
-    jrk.setTarget(1640);
-}
-
-
-void sendMotorData() {
-
-    pos_x = getPosition(X_DATA);
-    vel_x = getSpeed(X_DATA);
-    cur_x = getCurrent(X_DATA);
-
-    pos_y = getPosition(Y_DATA);
-    vel_y = getSpeed(Y_DATA);
-    cur_y = getCurrent(Y_DATA);
-
-    pos_z = getPosition(Z_DATA);
-    vel_z = getSpeed(Z_DATA);
-    cur_z = getCurrent(Z_DATA);
-
-    // Set desired number of decimal places, e.g., 3 decimal places
-    Serial.print("SEND ");
-    Serial.print(pos_x, 4);
-    Serial.print(", ");
-    Serial.print(vel_x, 2);
-    Serial.print(", ");
-    Serial.print(cur_x, 2);
-    Serial.print(", ");
-    Serial.print(pos_y, 4);
-    Serial.print(", ");
-    Serial.print(vel_y, 2);
-    Serial.print(", ");
-    Serial.print(cur_y, 2);
-    Serial.print(", ");
-    Serial.print(pos_z, 4);
-    Serial.print(", ");
-    Serial.print(vel_z, 2);
-    Serial.print(", ");
-    Serial.print(cur_z, 2);
-    Serial.println();
-
-}
-
-
-void parseCommand(String input) {
-  // Check if the message starts with "AK80,"
-  if (input.startsWith("AK80,")) {
-    commandReceived = true;
-    input.remove(0, 5); // Remove "AK80," from the input string
-
-    // Split the string into three parts using commas as separators
-    int firstComma = input.indexOf(',');
-    int secondComma = input.indexOf(',', firstComma + 1);
-
-    if (firstComma == -1 || secondComma == -1) {
-      Serial.println("Invalid command format.");
-      return;
-    }
-
-    String cmd0 = input.substring(0, firstComma);
-    String cmd1 = input.substring(firstComma + 1, secondComma);
-    String cmd2 = input.substring(secondComma + 1);
-
-    cmd_x = (cmd0.toFloat() * 360) / (PI * WHEEL_DIAMETER);
-    cmd_y = (cmd1.toFloat() * 360) / (PI * WHEEL_DIAMETER);
-    cmd_z = (cmd2.toFloat() * 360) / (PI * 0.2);
-
-  } else if (input.startsWith("POLO,")) {
-    commandReceived = true;
-    input.remove(0, 5);
-
-    int poloCommand = input.toInt();
-
-    switch (poloCommand) {
-      case 0:
-        // Serial.println("Chassis stable");
-        chassis_stable();
-        break;
-
-      case 1:
-        // Serial.println("Chassis change to X");
-        chassis_x();
-        break;
-
-      case 2:
-        // Serial.println("Chassis change to Y");
-        chassis_y();
-        break;
-    }
-
-  } else {
-    Serial.println("Invalid command prefix.");
-  }
-}
+CubemarsAK ak(5); // MCP2515 CS on GPIO 5
 
 void power_on(uint16_t motor_id) {
     struct can_frame canMsg;
@@ -172,81 +24,62 @@ void power_on(uint16_t motor_id) {
     canMsg.can_dlc = 8;
     for(int i=0; i<7; i++) canMsg.data[i] = 0xFF;
     canMsg.data[7] = 0xFC;
-
-    // Send the message over CAN
-    if (ak.mcp2515.sendMessage(&canMsg) != MCP2515::ERROR_OK) {
-        Serial.print("Error powering on motor with ID: ");
-        Serial.println(motor_id);
-    } else {
-        Serial.print("Powered on motor with ID: ");
-        Serial.println(motor_id);
-    }
+    ak.mcp2515.sendMessage(&canMsg);
 }
-
 
 void setup() {
     Serial.begin(115200);
     while (!Serial) {};
     
-    Wire.begin(SDA_PIN, SCL_PIN);
+    // Initialize SPI and I2C (even if I2C is unused now, kept for pin safety)
     SPI.begin();
     
+    // Initialize CAN
     ak.initializeCAN();
 
-    power_on(X_CONTROL);
-    power_on(Y_CONTROL);
-    power_on(Z_CONTROL);
-
-    ak.set_origin(X_CONTROL, 1);
-    ak.set_origin(Z_CONTROL, 1);
-    ak.set_origin(Y_CONTROL, 1);
+    Serial.println("System Ready. Powering on motor 1...");
+    power_on(MOTOR_ID);
+    ak.set_origin(MOTOR_ID, 1);
 }
 
 void loop() {
-    // Read all available messages on the CAN bus
+    // Read messages from CAN bus
     while (ak.mcp2515.readMessage(&ak.canMsg2) == MCP2515::ERROR_OK) {
-        canid_t can_id = ak.canMsg2.can_id;
-        MotorData data;
+        canid_t received_id = ak.canMsg2.can_id;
         
-        if (can_id == X_DATA || can_id == Y_DATA) {
-            // data.position = ((ak.canMsg2.data[0] << 8) | ak.canMsg2.data[1]) * 0.1;
-            data.position = (((ak.canMsg2.data[0] << 8) | ak.canMsg2.data[1]) * 0.1 * PI * WHEEL_DIAMETER) / 360;
-            data.speed = ((((ak.canMsg2.data[2] << 8) | ak.canMsg2.data[3]) * 10) / (POLE_PAIRS * CHASSIS_REDUCTION_RATIO)) * ((2*PI*WHEEL_DIAMETER)/60);
-            //ERPM
-            // data.current = ((ak.canMsg2.data[4] << 8) | ak.canMsg2.data[5]) * 0.01;
-            // qaxis current
-            data.current = ((ak.canMsg2.data[4] << 8) | ak.canMsg2.data[5]) * 0.01 * Kt_CHASSIS * CHASSIS_REDUCTION_RATIO;
-            // output torque = output_current * kt * reduction_ratio
-            data.motorTemp = ak.canMsg2.data[6];
-            data.errorCode = ak.canMsg2.data[7];
-            motorReadings[can_id] = data;
-        } 
-        else if (can_id == Z_DATA) {
-            data.position = (((ak.canMsg2.data[0] << 8) | ak.canMsg2.data[1]) * 0.1 * PI * 0.2) / 360;
-            data.speed = ((((ak.canMsg2.data[2] << 8) | ak.canMsg2.data[3]) * 10) / (POLE_PAIRS * LIFT_REDUCTION_RATIO)) * ((2*PI*0.2)/60);
-            // data.current = ((ak.canMsg2.data[4] << 8) | ak.canMsg2.data[5]) * 0.01;
-            data.current = ((ak.canMsg2.data[4] << 8) | ak.canMsg2.data[5]) * 0.01 * Kt_LIFT * LIFT_REDUCTION_RATIO;
-            data.motorTemp = ak.canMsg2.data[6];
-            data.errorCode = ak.canMsg2.data[7];
-            motorReadings[can_id] = data;
-        }
+        // Debug: See what ID the motor is actually using
+        Serial.print("Received CAN ID: ");
+        Serial.print(received_id);
+        Serial.print(" (Hex: 0x");
+        Serial.print(received_id, HEX);
+        Serial.println(")");
+
+        MotorData data;
+        // Position calculation
+        data.position = (((ak.canMsg2.data[0] << 8) | ak.canMsg2.data[1]) * 0.1 * PI * WHEEL_DIAMETER) / 360;
+        motorReadings[received_id] = data;
     }
 
-    sendMotorData();
+    // Print the last received position for ID 1 (or whatever ID was detected)
+    // We use a simple way to find the first available data in the map
+    if (!motorReadings.empty()) {
+        auto it = motorReadings.begin();
+        Serial.print("SEND ");
+        Serial.println(it->second.position, 4);
+    } else {
+        Serial.println("SEND 0.0000 (Waiting for motor...)");
+    }
 
-    // Check for available serial data
+    // Check for serial commands to move the motor
     if (Serial.available()) {
         String input = Serial.readStringUntil('\n');
-        // Serial.println(input);
-
-        parseCommand(input);
-
-        if (commandReceived == true) {
-            ak.set_pos_spd(X_CONTROL, cmd_x, 3000, 3000); 
-            ak.set_pos_spd(Z_CONTROL, cmd_z, 5000, 5000);
-            ak.set_pos_spd(Y_CONTROL, cmd_y, 3000, 3000);
-
-            commandReceived = false;
+        if (input.startsWith("MOVE,")) {
+            float target_pos = input.substring(5).toFloat();
+            Serial.print("Moving to: ");
+            Serial.println(target_pos);
+            ak.set_pos_spd(MOTOR_ID, target_pos, 1000, 1000);
         }
     }
+
+    delay(100); 
 }
