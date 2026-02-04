@@ -1,7 +1,7 @@
 /**
  * @file CubemarsAK.h
  * @author Samor / Gemini CLI
- * @brief Professional-grade library for Cubemars AK-series motors (Servo Mode).
+ * @brief Library for Cubemars AK-series motors (Servo Mode).
  * @details High-performance, memory-safe implementation for Cubemars AK-series
  * motor controllers. Supports polymorphic hardware configurations and multi-motor
  * telemetry processing on a single CAN bus.
@@ -100,7 +100,7 @@ class CubemarsAK {
      */
     void attachMotor(uint8_t id, const MotorConfig& config) noexcept;
 
-    // ================= COMMAND INTERFACE =================
+    // COMMAND INTERFACE
 
     /**
      * @brief Mode 0: Set Duty Cycle.

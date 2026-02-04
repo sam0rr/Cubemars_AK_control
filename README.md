@@ -2,11 +2,11 @@
 
 ## Overview
 
-Code to control CubeMars AK-series motors (AK40-10, AK80-9, etc.) using an Arduino (ESP32) and the MCP2515 CAN module. The library supports various control modes such as position control, velocity control, and position-velocity hybrid control with automatic hardware scaling based on motor profiles.
+Library to control CubeMars AK-series motors (AK40-10, AK80-9, etc.) using an Arduino (ESP32) and the MCP2515 CAN module. The library supports various control modes such as position control, velocity control, and position-velocity hybrid control with automatic hardware scaling based on motor profiles. The code also includes functions to read motor parameters like position, speed, current, temperature, and error codes via CAN communication.
 
 ## Equipment
 
-- **CubeMars ak40-10 motor** (30-45V power input)
+- **CubeMars AK-Series motor** (30-45V power input)
 - **ESP32 WROVER-KIT** (controller)
 - **MCP2515 CAN module** (to handle CAN communication)
 - **Power supply** (30-45V for motor)
@@ -29,7 +29,7 @@ Code to control CubeMars AK-series motors (AK40-10, AK80-9, etc.) using an Ardui
 
 ### Motor to Power Supply
 
-- Connect the CubeMars ak40-10 motor to the 25-30V power supply.
+- Connect the CubeMars ak motor to the 25-30V power supply.
 
 ### CAN Bus Wiring
 
@@ -85,8 +85,8 @@ To add new motor profiles, edit the `MotorPresets` namespace in `include/Cubemar
 
 ## Formatting
 
-To format the source code using the project's style guide:
-
+To format the source code using the project's style guide (requires `clang` package):
 ```bash
 clang-format -i src/*.cpp include/*.h
+prettier -w *
 ```
