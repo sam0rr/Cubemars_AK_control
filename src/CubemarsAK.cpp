@@ -1,7 +1,7 @@
 /**
  * @file CubemarsAK.cpp
  * @author Samor / Gemini CLI
- * @brief Professional-grade library for Cubemars AK-series motors (Servo Mode).
+ * @brief Library for Cubemars AK-series motors (Servo Mode).
  * @details High-performance, memory-safe implementation for Cubemars AK-series
  * motor controllers. Supports polymorphic hardware configurations and multi-motor
  * telemetry processing on a single CAN bus.
@@ -23,7 +23,7 @@ CubemarsAK::CubemarsAK(uint8_t csPin) : mcp2515(csPin) {}
 CubemarsAK::~CubemarsAK() {}
 
 /**
- * @brief Initializes the CAN controller.
+ * @brief Configures MCP2515 hardware.
  * @details Establishes 1Mbps communication with 8MHz oscillator.
  * @return void
  */
@@ -108,8 +108,6 @@ int32_t CubemarsAK::mechRpmToErpm(uint8_t id, float mechRpm) const noexcept {
     return 0;
 }
 
-// --- Byte Packing Helpers ---
-
 /**
  * @brief Serialize int32 to big-endian buffer.
  * @param buffer Target array.
@@ -134,8 +132,11 @@ void CubemarsAK::appendInt16(uint8_t* buffer, int16_t val, int16_t* index) noexc
     buffer[(*index)++] = static_cast<uint8_t>(val);
 }
 
-// --- Motor Control Commands ---
-
+/**
+ * @brief Dispatch Mode 0: Duty Cycle.
+ * @param id Motor ID.
+ * @param duty Range [-1.0, 1.0].
+ */
 void CubemarsAK::set_duty(uint8_t id, float duty) noexcept {
     if (!isAttached(id)) return;
     int32_t idx = 0;
@@ -145,6 +146,11 @@ void CubemarsAK::set_duty(uint8_t id, float duty) noexcept {
     transmit(buildCanId(id, AK_PWM), buf, 4);
 }
 
+/**
+ * @brief Dispatch Mode 1: Current Control.
+ * @param id Motor ID.
+ * @param current Amperes (clamped to safety max).
+ */
 void CubemarsAK::set_current(uint8_t id, float current) noexcept {
     if (!isAttached(id)) return;
     const float limit = _configs.at(id).maxCurrent;
@@ -155,6 +161,11 @@ void CubemarsAK::set_current(uint8_t id, float current) noexcept {
     transmit(buildCanId(id, AK_CURRENT), buf, 4);
 }
 
+/**
+ * @brief Dispatch Mode 2: Regenerative Braking.
+ * @param id Motor ID.
+ * @param current Brake current in Amperes.
+ */
 void CubemarsAK::set_cb(uint8_t id, float current) noexcept {
     if (!isAttached(id)) return;
     const float limit = _configs.at(id).maxCurrent;
@@ -165,6 +176,11 @@ void CubemarsAK::set_cb(uint8_t id, float current) noexcept {
     transmit(buildCanId(id, AK_CURRENT_BRAKE), buf, 4);
 }
 
+/**
+ * @brief Dispatch Mode 3: Velocity Control.
+ * @param id Motor ID.
+ * @param rpm Mechanical RPM.
+ */
 void CubemarsAK::set_spd(uint8_t id, float rpm) noexcept {
     if (!isAttached(id)) return;
     int32_t idx = 0;
@@ -173,6 +189,11 @@ void CubemarsAK::set_spd(uint8_t id, float rpm) noexcept {
     transmit(buildCanId(id, AK_VELOCITY), buf, 4);
 }
 
+/**
+ * @brief Dispatch Mode 4: Position Control.
+ * @param id Motor ID.
+ * @param pos Absolute Degrees.
+ */
 void CubemarsAK::set_pos(uint8_t id, float pos) noexcept {
     if (!isAttached(id)) return;
     int32_t idx = 0;
@@ -181,12 +202,24 @@ void CubemarsAK::set_pos(uint8_t id, float pos) noexcept {
     transmit(buildCanId(id, AK_POSITION), buf, 4);
 }
 
+/**
+ * @brief Dispatch Mode 5: Origin Calibration.
+ * @param id Motor ID.
+ * @param mode Calibration opcode.
+ */
 void CubemarsAK::set_origin(uint8_t id, uint8_t mode) noexcept {
     if (!isAttached(id)) return;
     uint8_t buf[1] = {mode};
     transmit(buildCanId(id, AK_ORIGIN), buf, 1);
 }
 
+/**
+ * @brief Dispatch Mode 6: Position-Velocity Trajectory.
+ * @param id Motor ID.
+ * @param pos Final Degrees.
+ * @param spd Mechanical RPM limit.
+ * @param rpa Mechanical Accel limit.
+ */
 void CubemarsAK::set_pos_spd(uint8_t id, float pos, int16_t spd, int16_t rpa) noexcept {
     if (!isAttached(id)) return;
     int32_t idx32 = 0;
@@ -197,8 +230,6 @@ void CubemarsAK::set_pos_spd(uint8_t id, float pos, int16_t spd, int16_t rpa) no
     appendInt16(buf, static_cast<int16_t>(mechRpmToErpm(id, static_cast<float>(rpa))), &idx16);
     transmit(buildCanId(id, AK_POSITION_VELOCITY), buf, 8);
 }
-
-// --- Feedback Processing ---
 
 /**
  * @brief Ingest pending CAN frames.
@@ -229,28 +260,51 @@ void CubemarsAK::updateFeedback() noexcept {
     }
 }
 
-// --- Const Correct Getters ---
-
+/**
+ * @brief Retrieve position for specified ID.
+ * @param id Motor ID.
+ * @return float Degrees.
+ */
 float CubemarsAK::getPosition(uint8_t id) const noexcept {
     auto it = _motors.find(id);
     return (it != _motors.end()) ? it->second.position : 0.0f;
 }
 
+/**
+ * @brief Retrieve speed for specified ID.
+ * @param id Motor ID.
+ * @return float Mechanical RPM.
+ */
 float CubemarsAK::getSpeed(uint8_t id) const noexcept {
     auto it = _motors.find(id);
     return (it != _motors.end()) ? it->second.speed : 0.0f;
 }
 
+/**
+ * @brief Retrieve current for specified ID.
+ * @param id Motor ID.
+ * @return float Amperes.
+ */
 float CubemarsAK::getCurrent(uint8_t id) const noexcept {
     auto it = _motors.find(id);
     return (it != _motors.end()) ? it->second.current : 0.0f;
 }
 
+/**
+ * @brief Retrieve temperature for specified ID.
+ * @param id Motor ID.
+ * @return int8_t Celsius.
+ */
 int8_t CubemarsAK::getMotorTemp(uint8_t id) const noexcept {
     auto it = _motors.find(id);
     return (it != _motors.end()) ? it->second.motorTemp : 0;
 }
 
+/**
+ * @brief Retrieve error code for specified ID.
+ * @param id Motor ID.
+ * @return uint8_t Error status.
+ */
 uint8_t CubemarsAK::getErrorCode(uint8_t id) const noexcept {
     auto it = _motors.find(id);
     return (it != _motors.end()) ? it->second.errorCode : 0;
