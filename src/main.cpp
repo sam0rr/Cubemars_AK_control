@@ -3,20 +3,18 @@
 #include <SPI.h>
 #include <CubemarsAK.h>
 
-#define SDA_PIN 21
-#define SCL_PIN 22
-
-// Single motor configuration (Factory Default ID = 1)
+// Motor configuration
 #define MOTOR_ID 1
-
 #define WHEEL_DIAMETER 0.1
 
 struct MotorData {
     float position;
+    float speed;
+    float current;
 };
 
 std::map<canid_t, MotorData> motorReadings;
-CubemarsAK ak(5); // MCP2515 CS on GPIO 5
+CubemarsAK ak(14); // CS set to 14
 
 void power_on(uint16_t motor_id) {
     struct can_frame canMsg;
@@ -31,55 +29,53 @@ void setup() {
     Serial.begin(115200);
     while (!Serial) {};
     
-    // Initialize SPI and I2C (even if I2C is unused now, kept for pin safety)
     SPI.begin();
-    
-    // Initialize CAN
     ak.initializeCAN();
 
-    Serial.println("System Ready. Powering on motor 1...");
+    // Initial commands to activate the motor
     power_on(MOTOR_ID);
     ak.set_origin(MOTOR_ID, 1);
+    
+    Serial.println("Motor initialized and ready on CS 16.");
 }
 
 void loop() {
-    // Read messages from CAN bus
+    // Read incoming CAN messages
     while (ak.mcp2515.readMessage(&ak.canMsg2) == MCP2515::ERROR_OK) {
-        canid_t received_id = ak.canMsg2.can_id;
-        
-        // Debug: See what ID the motor is actually using
-        Serial.print("Received CAN ID: ");
-        Serial.print(received_id);
-        Serial.print(" (Hex: 0x");
-        Serial.print(received_id, HEX);
-        Serial.println(")");
-
+        canid_t id = ak.canMsg2.can_id;
         MotorData data;
-        // Position calculation
-        data.position = (((ak.canMsg2.data[0] << 8) | ak.canMsg2.data[1]) * 0.1 * PI * WHEEL_DIAMETER) / 360;
-        motorReadings[received_id] = data;
+        
+        // Position: 0.1 deg/LSB converted to meters
+        data.position = (((int16_t)(ak.canMsg2.data[0] << 8) | ak.canMsg2.data[1]) * 0.1 * PI * WHEEL_DIAMETER) / 360;
+        // Speed: 10 RPM/LSB
+        data.speed = ((int16_t)(ak.canMsg2.data[2] << 8) | ak.canMsg2.data[3]) * 10.0;
+        // Current: 0.01 A/LSB
+        data.current = ((int16_t)(ak.canMsg2.data[4] << 8) | ak.canMsg2.data[5]) * 0.01;
+        
+        motorReadings[id] = data;
     }
 
-    // Print the last received position for ID 1 (or whatever ID was detected)
-    // We use a simple way to find the first available data in the map
+    // Format output for python_serial.py (expects exactly 9 values)
     if (!motorReadings.empty()) {
-        auto it = motorReadings.begin();
+        MotorData d = motorReadings.begin()->second;
         Serial.print("SEND ");
-        Serial.println(it->second.position, 4);
-    } else {
-        Serial.println("SEND 0.0000 (Waiting for motor...)");
+        Serial.print(d.position, 4); Serial.print(", ");
+        Serial.print(d.speed, 2);    Serial.print(", ");
+        Serial.print(d.current, 2);  Serial.print(", ");
+        // Fill the 6 other required values with 0.0
+        Serial.println("0.0, 0.0, 0.0, 0.0, 0.0, 0.0");
     }
 
-    // Check for serial commands to move the motor
+    // Manual command handling
     if (Serial.available()) {
         String input = Serial.readStringUntil('\n');
         if (input.startsWith("MOVE,")) {
-            float target_pos = input.substring(5).toFloat();
+            float target = input.substring(5).toFloat();
+            ak.set_pos_spd(MOTOR_ID, target, 2000, 2000);
             Serial.print("Moving to: ");
-            Serial.println(target_pos);
-            ak.set_pos_spd(MOTOR_ID, target_pos, 1000, 1000);
+            Serial.println(target);
         }
     }
 
-    delay(100); 
+    delay(20); 
 }

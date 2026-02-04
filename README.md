@@ -7,7 +7,7 @@ Code to control the CubeMars AK80-9 motor using an Arduino (ESP32) and the MCP25
 ## Equipment
 
 - **CubeMars AK80-9 motor** (30-45V power input)
-- **Arduino or ESP32** (controller)
+- **ESP32 WROVER-KIT** (controller)
 - **MCP2515 CAN module** (to handle CAN communication)
 - **Power supply** (30-45V for motor)
 - CAN bus connection cables
@@ -15,14 +15,17 @@ Code to control the CubeMars AK80-9 motor using an Arduino (ESP32) and the MCP25
 
 ## Wiring
 
-### MCP2515 Module to Arduino Nano Pin Connections
+### MCP2515 Module to ESP32 WROVER Pin Connections
 
-| MCP2515 Pin | Arduino Pin |
-| ----------- | ----------- |
-| CS          | GPIO 10     |
-| SO          | GPIO 12     |
-| SI          | GPIO 11     |
-| SCK         | GPIO 13     |
+| MCP2515 Pin   | ESP32 Pin (Default VSPI) | Description                                    |
+| :------------ | :----------------------- | :--------------------------------------------- |
+| **VCC**       | **5V**                   | Power for the MCP2515 (Must be 5V for TJA1050) |
+| **GND**       | **GND**                  | Ground                                         |
+| **CS**        | **GPIO 14**              | Chip Select (Configured in main.cpp)           |
+| **SO (MISO)** | **GPIO 19**              | Master In Slave Out                            |
+| **SI (MOSI)** | **GPIO 23**              | Master Out Slave In                            |
+| **SCK**       | **GPIO 18**              | Serial Clock                                   |
+| **INT**       | **GPIO 4**               | Interrupt (Optional)                           |
 
 ### Motor to Power Supply
 
@@ -38,6 +41,21 @@ Code to control the CubeMars AK80-9 motor using an Arduino (ESP32) and the MCP25
 
 Install the following libraries in your Arduino IDE:
 [mcp2515 library](https://github.com/autowp/arduino-mcp2515) - For controlling the MCP2515 CAN module.
+
+### PlatformIO Configuration (`platformio.ini`)
+
+```ini
+[env:esp32-wrover]
+platform = espressif32
+board = esp-wrover-kit
+framework = arduino
+monitor_speed = 115200
+lib_deps =
+    autowp/autowp-mcp2515 @ ^1.2.1
+    pololu/VL53L0X @ ^1.3.1
+    pololu/JrkG2 @ ^1.1.0
+    Wire
+```
 
 ### Motor Control Functions
 
