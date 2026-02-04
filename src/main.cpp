@@ -35,8 +35,7 @@ struct MotorData {
 std::map<canid_t, MotorData> motorReadings;
 
 JrkG2I2C jrk;
-CubemarsAK chassis(10);
-CubemarsAK lift(9);
+CubemarsAK ak(5); // Single instance for unique adapter
 
 float pos_x, vel_x, cur_x = 0.0;
 float pos_y, vel_y, cur_y = 0.0;
@@ -61,20 +60,6 @@ float getSpeed(canid_t canID) {
 float getCurrent(canid_t canID) {
     if (motorReadings.find(canID) != motorReadings.end()) {
         return motorReadings[canID].current;
-    }
-    return 0.0; 
-}
-
-int8_t getMotorTemp(canid_t canID) {
-    if (motorReadings.find(canID) != motorReadings.end()) {
-        return motorReadings[canID].motorTemp;
-    }
-    return 0.0; 
-}
-
-uint8_t getErrorCode(canid_t canID) {
-    if (motorReadings.find(canID) != motorReadings.end()) {
-        return motorReadings[canID].errorCode;
     }
     return 0.0; 
 }
@@ -185,17 +170,11 @@ void power_on(uint16_t motor_id) {
     struct can_frame canMsg;
     canMsg.can_id = motor_id;
     canMsg.can_dlc = 8;
-    canMsg.data[0] = 0xFF;
-    canMsg.data[1] = 0xFF;
-    canMsg.data[2] = 0xFF;
-    canMsg.data[3] = 0xFF;
-    canMsg.data[4] = 0xFF;
-    canMsg.data[5] = 0xFF;
-    canMsg.data[6] = 0xFF;
+    for(int i=0; i<7; i++) canMsg.data[i] = 0xFF;
     canMsg.data[7] = 0xFC;
 
     // Send the message over CAN
-    if (chassis.mcp2515.sendMessage(&canMsg) != MCP2515::ERROR_OK) {
+    if (ak.mcp2515.sendMessage(&canMsg) != MCP2515::ERROR_OK) {
         Serial.print("Error powering on motor with ID: ");
         Serial.println(motor_id);
     } else {
@@ -206,58 +185,54 @@ void power_on(uint16_t motor_id) {
 
 
 void setup() {
-    Serial.begin(19200);
+    Serial.begin(115200);
     while (!Serial) {};
-    chassis.initializeCAN();
-    lift.initializeCAN();
+    
+    Wire.begin(SDA_PIN, SCL_PIN);
+    SPI.begin();
+    
+    ak.initializeCAN();
 
     power_on(X_CONTROL);
     power_on(Y_CONTROL);
     power_on(Z_CONTROL);
 
-    chassis.set_origin(X_CONTROL, 1);
-    lift.set_origin(Z_CONTROL, 1);
-    chassis.set_origin(Y_CONTROL, 1);
+    ak.set_origin(X_CONTROL, 1);
+    ak.set_origin(Z_CONTROL, 1);
+    ak.set_origin(Y_CONTROL, 1);
 }
 
-unsigned long previousMillis = 0;  // Stores the last time Serial was checked
-const unsigned long interval = 10; // Interval in milliseconds
-
 void loop() {
-    if (chassis.mcp2515.readMessage(&chassis.canMsg2) == MCP2515::ERROR_OK) {
-        canid_t can_id = chassis.canMsg2.can_id;
+    // Read all available messages on the CAN bus
+    while (ak.mcp2515.readMessage(&ak.canMsg2) == MCP2515::ERROR_OK) {
+        canid_t can_id = ak.canMsg2.can_id;
         MotorData data;
-        // data.position = ((chassis.canMsg2.data[0] << 8) | chassis.canMsg2.data[1]) * 0.1;
-        data.position = (((chassis.canMsg2.data[0] << 8) | chassis.canMsg2.data[1]) * 0.1 * PI * WHEEL_DIAMETER) / 360;
-        data.speed = ((((chassis.canMsg2.data[2] << 8) | chassis.canMsg2.data[3]) * 10) / (POLE_PAIRS * CHASSIS_REDUCTION_RATIO)) * ((2*PI*WHEEL_DIAMETER)/60);
-        //ERPM
-        // data.current = ((chassis.canMsg2.data[4] << 8) | chassis.canMsg2.data[5]) * 0.01;
-        // qaxis current
-        data.current = ((chassis.canMsg2.data[4] << 8) | chassis.canMsg2.data[5]) * 0.01 * Kt_CHASSIS * CHASSIS_REDUCTION_RATIO;
-        // output torque = output_current * kt* reduction_ratio
-        data.motorTemp = chassis.canMsg2.data[6];
-        data.errorCode = chassis.canMsg2.data[7];
-        motorReadings[can_id] = data;
-
         
+        if (can_id == X_DATA || can_id == Y_DATA) {
+            // data.position = ((ak.canMsg2.data[0] << 8) | ak.canMsg2.data[1]) * 0.1;
+            data.position = (((ak.canMsg2.data[0] << 8) | ak.canMsg2.data[1]) * 0.1 * PI * WHEEL_DIAMETER) / 360;
+            data.speed = ((((ak.canMsg2.data[2] << 8) | ak.canMsg2.data[3]) * 10) / (POLE_PAIRS * CHASSIS_REDUCTION_RATIO)) * ((2*PI*WHEEL_DIAMETER)/60);
+            //ERPM
+            // data.current = ((ak.canMsg2.data[4] << 8) | ak.canMsg2.data[5]) * 0.01;
+            // qaxis current
+            data.current = ((ak.canMsg2.data[4] << 8) | ak.canMsg2.data[5]) * 0.01 * Kt_CHASSIS * CHASSIS_REDUCTION_RATIO;
+            // output torque = output_current * kt * reduction_ratio
+            data.motorTemp = ak.canMsg2.data[6];
+            data.errorCode = ak.canMsg2.data[7];
+            motorReadings[can_id] = data;
+        } 
+        else if (can_id == Z_DATA) {
+            data.position = (((ak.canMsg2.data[0] << 8) | ak.canMsg2.data[1]) * 0.1 * PI * 0.2) / 360;
+            data.speed = ((((ak.canMsg2.data[2] << 8) | ak.canMsg2.data[3]) * 10) / (POLE_PAIRS * LIFT_REDUCTION_RATIO)) * ((2*PI*0.2)/60);
+            // data.current = ((ak.canMsg2.data[4] << 8) | ak.canMsg2.data[5]) * 0.01;
+            data.current = ((ak.canMsg2.data[4] << 8) | ak.canMsg2.data[5]) * 0.01 * Kt_LIFT * LIFT_REDUCTION_RATIO;
+            data.motorTemp = ak.canMsg2.data[6];
+            data.errorCode = ak.canMsg2.data[7];
+            motorReadings[can_id] = data;
+        }
     }
 
-
-    if (lift.mcp2515.readMessage(&lift.canMsg2) == MCP2515::ERROR_OK) {
-        canid_t can_id = lift.canMsg2.can_id;
-        MotorData data;
-        data.position = (((lift.canMsg2.data[0] << 8) | lift.canMsg2.data[1]) * 0.1 * PI * 0.2)/360;
-        data.speed = ((((lift.canMsg2.data[2] << 8) | lift.canMsg2.data[3]) * 10) / (POLE_PAIRS * LIFT_REDUCTION_RATIO)) * ((2*PI*0.2)/60);
-        // data.current = ((lift.canMsg2.data[4] << 8) | lift.canMsg2.data[5]) * 0.01;
-        data.current = ((chassis.canMsg2.data[4] << 8) | chassis.canMsg2.data[5]) * 0.01 * Kt_LIFT * LIFT_REDUCTION_RATIO;
-        data.motorTemp = lift.canMsg2.data[6];
-        data.errorCode = lift.canMsg2.data[7];
-        motorReadings[can_id] = data;
-
-    }    
-
     sendMotorData();
-
 
     // Check for available serial data
     if (Serial.available()) {
@@ -267,9 +242,9 @@ void loop() {
         parseCommand(input);
 
         if (commandReceived == true) {
-            chassis.set_pos_spd(X_CONTROL, cmd_x, 3000, 3000); 
-            lift.set_pos_spd(Z_CONTROL, cmd_z, 5000, 5000);
-            chassis.set_pos_spd(Y_CONTROL, cmd_y, 3000, 3000);
+            ak.set_pos_spd(X_CONTROL, cmd_x, 3000, 3000); 
+            ak.set_pos_spd(Z_CONTROL, cmd_z, 5000, 5000);
+            ak.set_pos_spd(Y_CONTROL, cmd_y, 3000, 3000);
 
             commandReceived = false;
         }
