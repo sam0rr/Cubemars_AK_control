@@ -75,9 +75,10 @@ This function combines position and velocity control, allowing you to set both a
 
 ## Motor Configuration
 
-The library uses a registration system. You must "attach" each motor ID with its hardware profile in `setup()`:
+The library uses a registration system. **You must "attach" each motor ID with its hardware profile in `setup()` before sending any commands.** If an ID is not attached, the library will ignore commands for that motor and log an error to Serial.
 
 ```cpp
+// Mandatory setup for each motor
 ak.attachMotor(MOTOR_ID, MotorPresets::AK40_10);
 ```
 
