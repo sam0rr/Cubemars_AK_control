@@ -21,7 +21,7 @@ void setup() {
     Serial.begin(SERIAL_BAUD);
     while (!Serial) {}; 
     
-    Serial.println("\n[SYSTEM] Starting Motion Test...");
+    Serial.println("\n[SYSTEM] Starting AK40-10 Motion Test...");
 
     SPI.begin();
 
@@ -35,7 +35,7 @@ void setup() {
 
     // 2. Init CAN
     ak.initializeCAN();
-    Serial.println("[INIT] Ready to move!");
+    Serial.println("[INIT] AK40-10 Ready!");
     
     // Safety delay
     delay(1000);
@@ -50,11 +50,12 @@ void loop() {
 
         if (togglePosition) {
             Serial.println(">>> MOVING TO: 180 Degrees");
-            // Syntax: ID, Position (deg), Speed (rpm), Acceleration (rpm/s)
-            ak.set_pos_spd(MOTOR_ID, 180, 1000, 500);
+            // Syntax: ID, Position (deg), Speed (mech RPM), Acceleration (mech RPM/s)
+            // Note: 200 RPM is a safe speed for AK40-10 (Max ~400 RPM at 24V)
+            ak.set_pos_spd(MOTOR_ID, 180, 200, 100);
         } else {
             Serial.println(">>> MOVING TO: 0 Degrees");
-            ak.set_pos_spd(MOTOR_ID, 0, 1000, 500);
+            ak.set_pos_spd(MOTOR_ID, 0, 200, 100);
         }
     }
 

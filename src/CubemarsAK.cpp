@@ -41,6 +41,12 @@ void CubemarsAK::buffer_append_int16(uint8_t* buffer, int16_t number, int16_t *i
     buffer[(*index)++] = number >> 8;
     buffer[(*index)++] = number;
 }
+
+// Convert Mechanical RPM (output shaft) to Electrical RPM (ERPM)
+int32_t CubemarsAK::mechRpmToErpm(float mechRpm) {
+    return (int32_t)(mechRpm * AK40_10_GEAR_RATIO * AK40_10_POLE_PAIRS);
+}
+
 // DUTY CYCLE MODE - #0
 void CubemarsAK::set_duty(uint8_t controller_id, float duty)
 {
@@ -54,27 +60,38 @@ void CubemarsAK::set_duty(uint8_t controller_id, float duty)
 // The current value is of int32 type, and the value (-60000, 60000) represents -60-60A.
 void CubemarsAK::set_current(uint8_t controller_id, float current)
 {
+    // Safety: Clamp current to motor limits
+    if (current > AK40_10_MAX_CURRENT) current = AK40_10_MAX_CURRENT;
+    if (current < -AK40_10_MAX_CURRENT) current = -AK40_10_MAX_CURRENT;
+
     int32_t send_index = 0;
     uint8_t buffer[4];
     buffer_append_int32(buffer, (int32_t)(current * 1000.0), &send_index);
     comm_can_transmit_eid(canId(controller_id, AKMode::AK_CURRENT), buffer, send_index);
 }
+
 // CURRENT BRAKE MODE - #2
 // The braking current value is of int32 type, and the value (0, 60000) represents 0-60A.
 void CubemarsAK::set_cb(uint8_t controller_id, float current)
 {
+    // Safety: Clamp current to motor limits
+    if (current > AK40_10_MAX_CURRENT) current = AK40_10_MAX_CURRENT;
+    if (current < 0) current = 0;
+
     int32_t send_index = 0;
     uint8_t buffer[4];
     buffer_append_int32(buffer, (int32_t)(current * 1000.0), &send_index);
     comm_can_transmit_eid(canId(controller_id, AKMode::AK_CURRENT_BRAKE), buffer, send_index);
 }
+
 // VELOCITY MODE - #3
-// the speed value is int32 type, and the range (-100000, 100000) represents (-100000, 100000) electrical speed.
+// Input: mechanical RPM (output shaft). Converted to ERPM for the controller.
 void CubemarsAK::set_spd(uint8_t controller_id, float rpm)
 {
     int32_t send_index = 0;
     uint8_t buffer[4];
-    buffer_append_int32(buffer, (int32_t)rpm, &send_index);
+    int32_t erpm = mechRpmToErpm(rpm);
+    buffer_append_int32(buffer, erpm, &send_index);
     comm_can_transmit_eid(canId(controller_id, AKMode::AK_VELOCITY), buffer, send_index);
 }
 // POSITION LOOP MODE - #4

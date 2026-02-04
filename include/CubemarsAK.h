@@ -26,6 +26,11 @@ enum AKMode {
 };
 
 
+// AK40-10 Specific Constants
+#define AK40_10_GEAR_RATIO    10.0f
+#define AK40_10_POLE_PAIRS    7
+#define AK40_10_MAX_CURRENT   35.0f // Amps, from McParams
+
 class CubemarsAK {
 public:
     CubemarsAK(uint8_t csPin);
@@ -48,6 +53,9 @@ public:
     void set_pos(uint8_t controller_id, float pos);
     void set_origin(uint8_t controller_id, uint8_t set_origin_mode);
     void set_pos_spd(uint8_t controller_id, float pos, int16_t spd, int16_t RPA);
+
+    // Helper to convert Mechanical RPM to Electrical RPM (ERPM)
+    int32_t mechRpmToErpm(float mechRpm);
 
     void comm_can_transmit_eid(uint32_t id, const uint8_t *data, uint8_t len);
     void buffer_append_int32(uint8_t* buffer, int32_t number, int32_t *index);
