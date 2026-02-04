@@ -2,12 +2,10 @@
  * @file CubemarsAK.h
  * @author Samor / Gemini CLI
  * @brief Professional-grade library for Cubemars AK-series motors (Servo Mode).
- * 
- * This library implements the Cubemars Servo Mode CAN protocol, specifically
+ * @details This library implements the Cubemars Servo Mode CAN protocol, specifically
  * optimized for the AK40-10 KV170 motor. It handles multi-motor telemetry
  * using a map-based internal database and ensures hardware safety through
  * rigorous input clamping.
- *
  * @version 1.1
  * @date 2026-02-04
  */
@@ -18,6 +16,7 @@
 #include <Arduino.h>
 #include <SPI.h>
 #include <mcp2515.h>
+
 #include <map>
 
 /**
@@ -46,29 +45,29 @@ enum AKMode : uint8_t {
     AK_POSITION_VELOCITY = 6, /**< Trajectory Control (Pos + Speed + Accel) */
 };
 
-/** 
+/**
  * @name AK40-10 Physical Constants
- * @{ 
+ * @{
  */
-#define AK40_10_GEAR_RATIO  10.0f  /**< Internal planetary reduction ratio */
-#define AK40_10_POLE_PAIRS  7      /**< Magnetic pole pairs (14 poles) */
-#define AK40_10_MAX_CURRENT 35.0f  /**< Absolute safety current limit (Amps) */
+#define AK40_10_GEAR_RATIO 10.0f  /**< Internal planetary reduction ratio */
+#define AK40_10_POLE_PAIRS 7      /**< Magnetic pole pairs (14 poles) */
+#define AK40_10_MAX_CURRENT 35.0f /**< Absolute safety current limit (Amps) */
 /** @} */
 
 /**
  * @class CubemarsAK
  * @brief High-level hardware abstraction for Cubemars AK-series motor controllers.
- * 
+ *
  * @note This class is non-copyable to prevent SPI bus contention or hardware state conflicts.
  */
 class CubemarsAK {
-public:
+   public:
     /**
      * @brief Construct a new Cubemars AK controller instance.
      * @param csPin SPI Chip Select pin connected to the MCP2515.
      */
     explicit CubemarsAK(uint8_t csPin);
-    
+
     /**
      * @brief Standard destructor.
      */
@@ -84,7 +83,7 @@ public:
      */
     void initializeCAN() noexcept;
 
-    // COMMAND INTERFACE
+    // ================= COMMAND INTERFACE =================
 
     /**
      * @brief Sets the motor duty cycle (Mode 0).
@@ -137,7 +136,7 @@ public:
      */
     void set_pos_spd(uint8_t id, float pos, int16_t spd, int16_t rpa) noexcept;
 
-    // TELEMETRY INTERFACE
+    // ================= TELEMETRY INTERFACE =================
 
     /**
      * @brief Processes all pending CAN messages.
@@ -157,13 +156,13 @@ public:
     MCP2515 mcp2515;         /**< Low-level SPI-to-CAN controller instance */
     struct can_frame canMsg; /**< Shared memory buffer for CAN frames */
 
-private:
+   private:
     /** @brief Builds an EFF CAN ID from ID and Mode. */
     uint32_t buildCanId(uint8_t id, AKMode mode) const noexcept;
-    
+
     /** @brief Generic transmission method for EID frames. */
     void transmit(uint32_t id, const uint8_t* data, uint8_t len) noexcept;
-    
+
     /** @brief Converts mechanical shaft speed to electrical ERPM. */
     int32_t mechRpmToErpm(float mechRpm) const noexcept;
 
@@ -176,4 +175,4 @@ private:
     std::map<uint8_t, MotorData> _motors; /**< Internal database of motor states */
 };
 
-#endif // CUBEMARSAK_H
+#endif  // CUBEMARSAK_H
