@@ -76,7 +76,7 @@ This function combines position and velocity control, allowing you to set both a
 ## Formatting
 
 To format the source code using the project's style guide (requires `clang` package):
-
 ```bash
 clang-format -i src/*.cpp include/*.h
+prettier -w *
 ```
