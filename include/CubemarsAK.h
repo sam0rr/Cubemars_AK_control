@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <SPI.h>
 #include <mcp2515.h>
+
 #include <map>
 
 // struct MotorData {
@@ -25,19 +26,18 @@ enum AKMode {
     AK_POSITION_VELOCITY = 6,
 };
 
-
 // AK40-10 Specific Constants
-#define AK40_10_GEAR_RATIO    10.0f
-#define AK40_10_POLE_PAIRS    7
-#define AK40_10_MAX_CURRENT   35.0f // Amps, from McParams
+#define AK40_10_GEAR_RATIO 10.0f
+#define AK40_10_POLE_PAIRS 7
+#define AK40_10_MAX_CURRENT 35.0f  // Amps, from McParams
 
 class CubemarsAK {
-public:
+   public:
     CubemarsAK(uint8_t csPin);
     ~CubemarsAK();
 
     // std::map<canid_t, MotorData> motorReadings;
-    
+
     void initializeCAN();
 
     uint32_t canId(int id, AKMode Mode_set);
@@ -57,9 +57,9 @@ public:
     // Helper to convert Mechanical RPM to Electrical RPM (ERPM)
     int32_t mechRpmToErpm(float mechRpm);
 
-    void comm_can_transmit_eid(uint32_t id, const uint8_t *data, uint8_t len);
-    void buffer_append_int32(uint8_t* buffer, int32_t number, int32_t *index);
-    void buffer_append_int16(uint8_t* buffer, int16_t number, int16_t *index);
+    void comm_can_transmit_eid(uint32_t id, const uint8_t* data, uint8_t len);
+    void buffer_append_int32(uint8_t* buffer, int32_t number, int32_t* index);
+    void buffer_append_int16(uint8_t* buffer, int16_t number, int16_t* index);
 
     void unpackServo();
     float getPosition(canid_t can_id);
@@ -71,7 +71,7 @@ public:
     struct can_frame canMsg2;
     MCP2515 mcp2515;
 
-private:
+   private:
     uint32_t controller_id;
     float position;
     float speed;
@@ -80,4 +80,4 @@ private:
     uint8_t errorCode;
 };
 
-#endif // CUBEMARSAK_H
+#endif  // CUBEMARSAK_H
