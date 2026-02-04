@@ -1,68 +1,118 @@
+# @file python_serial.py
+# @author Samor / Gemini CLI
+# @brief Professional multi-motor telemetry visualizer for AK-Series.
+
 import serial
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 import re
+import collections
 
-# Serial port configuration
-serial_port = "/dev/ttyUSB0"  # Update with your Arduino's serial port
-baud_rate = 115200
+# --- Configuration ---
+SERIAL_PORT = "/dev/ttyUSB0"  # Update this to your ESP32 port
+BAUD_RATE = 115200
+MAX_POINTS = 200  # Horizontal history (points)
+
+# --- State ---
+# Structure: { motor_id: { 'pos': deque, 'spd': deque, 'cur': deque, 'time': deque, 't_count': int } }
+motors_data = {}
 
 # Open serial connection
-ser = serial.Serial(serial_port, baud_rate, timeout=1)
+try:
+    ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=0.1)
+    print(f"Connected to {SERIAL_PORT}")
+except Exception as e:
+    print(f"Failed to connect: {e}")
+    exit()
 
-# Data storage
-pos_x_data = []
-time_data = []
 
-# Time counter
-time_counter = 0
-
-def parse_data(line):
+def parse_line(line):
     """
-    Parse the incoming data packet from Arduino.
-    Expected format: "SEND pos_x, vel_x, cur_x, pos_y, vel_y, cur_y, pos_z, vel_z, cur_z"
+    Parses format: "Motor [1] -> Pos: 180.0 deg | Spd: 0 RPM | Cur: 0.00 A"
     """
-    try:
-        # Extract the numbers using regular expressions
-        match = re.match(r"SEND ([\d\.\-]+), ([\d\.\-]+), ([\d\.\-]+), ([\d\.\-]+), ([\d\.\-]+), ([\d\.\-]+), ([\d\.\-]+), ([\d\.\-]+), ([\d\.\-]+)", line)
-        if match:
-            return [float(value) for value in match.groups()]
-    except Exception as e:
-        print(f"Error parsing data: {e}")
+    pattern = r"Motor \[(\d+)\] -> Pos: ([\d\.\-]+) deg \| Spd: ([\d\.\-]+) RPM \| Cur: ([\d\.\-]+) A"
+    match = re.search(pattern, line)
+    if match:
+        return {
+            "id": int(match.group(1)),
+            "pos": float(match.group(2)),
+            "spd": float(match.group(3)),
+            "cur": float(match.group(4)),
+        }
     return None
 
+
 def update_plot(frame):
-    global time_counter
-    # Read line from serial port
-    if ser.in_waiting > 0:
-        line = ser.readline().decode('utf-8').strip()
-        data = parse_data(line)
-        if data:
-            pos_x = data[0]  # Extract pos_x
-            pos_x_data.append(pos_x)
-            time_data.append(time_counter)
-            time_counter += 1
+    global motors_data
 
-            # Keep only the last 100 points for smoother plotting
-            if len(pos_x_data) > 100:
-                pos_x_data.pop(0)
-                time_data.pop(0)
+    # 1. Ingest all available Serial data
+    while ser.in_waiting > 0:
+        try:
+            line = ser.readline().decode("utf-8", errors="ignore").strip()
+            data = parse_line(line)
+            if data:
+                m_id = data["id"]
+                # Initialize motor if new
+                if m_id not in motors_data:
+                    motors_data[m_id] = {
+                        "pos": collections.deque(maxlen=MAX_POINTS),
+                        "spd": collections.deque(maxlen=MAX_POINTS),
+                        "cur": collections.deque(maxlen=MAX_POINTS),
+                        "time": collections.deque(maxlen=MAX_POINTS),
+                        "t_count": 0,
+                    }
 
-            # Update the plot
+                # Append data
+                m = motors_data[m_id]
+                m["pos"].append(data["pos"])
+                m["spd"].append(data["spd"])
+                m["cur"].append(data["cur"])
+                m["time"].append(m["t_count"])
+                m["t_count"] += 1
+        except Exception:
+            continue
+
+    if not motors_data:
+        return
+
+    # 2. Dynamic UI Management
+    m_ids = sorted(motors_data.keys())
+    num_motors = len(m_ids)
+
+    # If number of motors changed, we need to rebuild subplots (rare but possible)
+    if not hasattr(update_plot, "last_count") or update_plot.last_count != num_motors:
+        plt.clf()
+        update_plot.axs = fig.subplots(3, num_motors, sharex="col", squeeze=False)
+        update_plot.last_count = num_motors
+        plt.tight_layout(pad=2.0)
+
+    # 3. Update Axes
+    for col, m_id in enumerate(m_ids):
+        m = motors_data[m_id]
+        labels = ["Pos (deg)", "Spd (RPM)", "Cur (A)"]
+        keys = ["pos", "spd", "cur"]
+        colors = ["#1f77b4", "#ff7f0e", "#2ca02c"]
+
+        for row in range(3):
+            ax = update_plot.axs[row, col]
             ax.clear()
-            ax.plot(time_data, pos_x_data, label="Position X")
-            ax.set_title("Real-Time Position X")
-            ax.set_xlabel("Time (s)")
-            ax.set_ylabel("Position (m)")
-            ax.legend()
-            ax.grid()
+            ax.plot(list(m["time"]), list(m[keys[row]]), color=colors[row])
+            ax.grid(True, alpha=0.3)
 
-# Set up the plot
-fig, ax = plt.subplots()
-ani = FuncAnimation(fig, update_plot, interval=100)
+            if row == 0:
+                ax.set_title(f"Motor ID {m_id}")
+            if col == 0:
+                ax.set_ylabel(labels[row])
+            if row == 2:
+                ax.set_xlabel("Samples")
 
-# Show the plot
-plt.show()
 
-# Close the serial connection on exit
-ser.close()
+# Setup Figure
+fig = plt.figure(figsize=(12, 8))
+ani = FuncAnimation(fig, update_plot, interval=100, cache_frame_data=False)
+
+try:
+    plt.show()
+finally:
+    ser.close()
+    print("Serial closed.")
