@@ -4,80 +4,67 @@
 #include <mcp2515.h>
 
 // ================= CONFIGURATION =================
-#define CS_PIN 14           // Chip Select (GPIO 14)
-#define MOTOR_ID 1          // Target Motor ID
-#define WHEEL_DIAMETER 0.1  // 10cm Wheel
+#define CS_PIN 14   // Chip Select (GPIO 14)
+#define MOTOR_ID 1  // Target Motor ID
 #define SERIAL_BAUD 115200
 
 // ================= OBJECTS =================
 CubemarsAK ak(CS_PIN);
 
-// Variables for movement logic
 unsigned long lastMoveTime = 0;
 bool togglePosition = false;
 
-// ================= SETUP =================
 void setup() {
     Serial.begin(SERIAL_BAUD);
-    while (!Serial) {
-    };
+    while (!Serial);
 
-    Serial.println("\n[SYSTEM] Starting AK40-10 Motion Test...");
+    Serial.println("\n[SYSTEM] Starting AK40-10 Professional Control...");
 
     SPI.begin();
-
-    // 1. Retry connecting to MCP2515 until success
-    Serial.print("[INIT] Connecting to MCP2515...");
-    while (ak.mcp2515.reset() != MCP2515::ERROR_OK) {
-        Serial.print(".");
-        delay(500);
-    }
-    Serial.println(" SUCCESS!");
-
-    // 2. Init CAN
     ak.initializeCAN();
-    Serial.println("[INIT] AK40-10 Ready!");
 
-    // Safety delay
     delay(1000);
 }
 
-// ================= LOOP =================
 void loop() {
     // --- 1. MOVEMENT LOGIC (Every 3 seconds) ---
     if (millis() - lastMoveTime >= 3000) {
         lastMoveTime = millis();
         togglePosition = !togglePosition;
 
-        if (togglePosition) {
-            Serial.println(">>> MOVING TO: 180 Degrees");
-            // Syntax: ID, Position (deg), Speed (mech RPM), Acceleration (mech RPM/s)
-            // Note: 200 RPM is a safe speed for AK40-10 (Max ~400 RPM at 24V)
-            ak.set_pos_spd(MOTOR_ID, 180, 200, 100);
-        } else {
-            Serial.println(">>> MOVING TO: 0 Degrees");
-            ak.set_pos_spd(MOTOR_ID, 0, 200, 100);
-        }
+        float targetPos = togglePosition ? 180.0f : 0.0f;
+        Serial.print(">>> COMMAND: Moving to ");
+        Serial.print(targetPos);
+        Serial.println(" deg");
+
+        // ID, Pos, Speed (Mechanical RPM), Accel (Mechanical RPM/s)
+        ak.set_pos_spd(MOTOR_ID, targetPos, 200, 100);
     }
 
-    // --- 2. READING FEEDBACK ---
-    if (ak.mcp2515.readMessage(&ak.canMsg2) == MCP2515::ERROR_OK) {
-        // Decoding (Standard Servo Mode Data)
-        int16_t raw_pos = (ak.canMsg2.data[0] << 8) | ak.canMsg2.data[1];
-        int16_t raw_current = (ak.canMsg2.data[4] << 8) | ak.canMsg2.data[5];
+    // --- 2. FEEDBACK PROCESSING ---
+    // Update the internal state of all motors connected to the bus
+    ak.updateFeedback();
 
-        // Convert raw pos (0.1 deg/bit) to actual Degrees
-        float current_deg = raw_pos * 0.1;
-        float current_amps = raw_current * 0.01;
+    // Print feedback at 10Hz to avoid flooding serial
+    static unsigned long lastPrint = 0;
+    if (millis() - lastPrint > 100) {
+        lastPrint = millis();
 
-        // Print only if ID matches (ignoring the extended bits logic for simplicity)
-        // We check the lowest byte to match ID 1
-        if ((ak.canMsg2.can_id & 0xFF) == MOTOR_ID) {
-            Serial.print("Feedback -> Pos: ");
-            Serial.print(current_deg, 1);
-            Serial.print(" deg | Current: ");
-            Serial.print(current_amps, 2);
-            Serial.println(" A");
-        }
+        float p = ak.getPosition(MOTOR_ID);
+        float v = ak.getSpeed(MOTOR_ID);
+        float i = ak.getCurrent(MOTOR_ID);
+
+        Serial.print("Motor [");
+        Serial.print(MOTOR_ID);
+        Serial.print("] -> ");
+        Serial.print("Pos: ");
+        Serial.print(p, 1);
+        Serial.print(" deg | ");
+        Serial.print("Spd: ");
+        Serial.print(v, 0);
+        Serial.print(" RPM | ");
+        Serial.print("Cur: ");
+        Serial.print(i, 2);
+        Serial.println(" A");
     }
 }
